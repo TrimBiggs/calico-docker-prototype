@@ -1,3 +1,7 @@
+<hr>
+# An updated version of these instructions is available here https://github.com/metaswitch/calico-docker
+<hr>
+
 # Calico docker prototype
 This prototype demonstrates Calico running in a docker environment. If you do try using it, let me know how you get on by email (or just add a comment to the wiki).
 
