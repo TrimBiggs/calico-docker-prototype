@@ -1,3 +1,6 @@
+<hr>
+# An updated version of these instructions is available here https://github.com/metaswitch/calico-docker
+<hr>
 # L2 Routed Docker Prototype
 
 This prototype demonstrates Calico running in a docker environment
