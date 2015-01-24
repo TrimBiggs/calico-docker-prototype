@@ -6,15 +6,14 @@ The following instructions show how to set up GCE for Calico, install and config
 ## How to install and run it.
 You'll need two GCE hosts running CoreOS, each with a valid IP address that you'll need to set in a number of places (listed in the bullet points below). (You can add further servers, but it requires extra changes to the config files that is not documented in detail here.) There are a couple of gotchas here.
 
-* You must make sure that you have configured both these hosts with the "IP forwarding" flag set (under advanced options in the web developer console).
-* Our testing showed that several required kernel modules were missing from the default CoreOS image (`coreos-stable-444-5-0-v20141016`); these were included in `coreos-beta-494-1-0-v20141124` (at the time of writing), so you should create your hosts using this image (or a later one).
-
+* You must make sure that the "IP forwarding" flag is set when you first configure both of these hosts (under advanced options in the web developer console, or by specifying the `--can-ip-forward` flag when creating the hosts from the command line).
 * A working OS on the servers, with docker installed. We recommend CoreOS, though any other flavour of Linux is likely to work, subject to the requirement that you need at least version 1.2 of docker (and we recommend using at least version 1.3).
+    * Our testing showed that several required kernel modules were missing from the default CoreOS image (`coreos-stable-444-5-0-v20141016`); these were included in `coreos-beta-494-1-0-v20141124` (at the time of writing), so you should create your hosts using this image (or a later one) if using CoreOS.
 
 _All commands from here assume that you are running as root._
 
 
-The installation assumes two GCE hosts, each with a valid IP address.  You'll need to use these IP addresses in a number of places as documented below. In the example config, these IP addresses are 10.240.254.171 and 10.240.58.221 for the first and second server respectively - you should replace references to these IP addresses with your own host addresses.
+The installation assumes two GCE hosts, each with a valid IP address.  You'll need to use these IP addresses in a number of places as documented below. In the example config, these IP addresses are 10.240.10.1 and 10.240.20.1 for the first and second server respectively - you should replace references to these IP addresses with your own host addresses.
 
 #### Prerequisites
 
@@ -25,10 +24,10 @@ The installation assumes two GCE hosts, each with a valid IP address.  You'll ne
     + The Dockerfiles under the directory `felix` needs to have the IP addresses changed.
     + The Dockerfile under the directory  `bird` needs to have the IP addresses changed.
 
-    If your code is in `/opt/demo`, and the two IP addresses in use are `1.2.3.4` and `2.3.4.5`, using hostname `host_1` and `host_2`, then the following commands will do it.
+    If your code is in `/opt/demo`, and the two IP addresses in use are `10.240.10.1` and `10.240.20.1`, using hostname `host_1` and `host_2`, then the following commands will do it.
     
-            IP1=1.2.3.4
-            IP2=2.3.4.5
+            IP1=10.240.10.1
+            IP2=10.240.20.1
             HOST1=host_1
             HOST2=host_2
             for file in /opt/demo/felix.txt /opt/demo/felix/Dockerfile /opt/demo/bird/Dockerfile;
@@ -62,9 +61,9 @@ The installation assumes two GCE hosts, each with a valid IP address.  You'll ne
 
 ### Configure the network
 
-1. In order for routing to work correctly between hosts, you must notify GCE of the network address configuration you are using for your endpoints. For this demo we do this by manually running the `gcloud` utility; a production instance would almost certainly use the RESTful API. In these instructions, we'll assume that you plan on hosting addresses in the 192.168.1.0/24 range on host 1, and addresses in the 192.168.2.0/24 range on host 2. The instructions for doing this are as follows.
+1. In order for routing to work correctly between hosts, you must notify GCE of the network address configuration you are using for your endpoints. For this demo we do this by manually running the `gcloud` utility; a production instance would almost certainly use the RESTful API. In these instructions, we'll assume that you plan on hosting addresses in the 192.168.1.0/24 range on host 1, and addresses in the 192.168.2.0/24 range on host 2 (remember to change these IP addresses to fit your address range if you modified the range in bird.conf!). The instructions for doing this are as follows.
 
-    * Spin up a GCE VM (you can use another OS if you prefer, but a GCE Ubuntu VM is quick and easy). Full documentation on how to install gcloud on that VM are given here : [https://cloud.google.com/compute/docs/gcloud-compute/](https://cloud.google.com/compute/docs/gcloud-compute/). For purposes of this demo, you should execute the following commands on the VM.
+    * Spin up a GCE VM (you can use another OS if you prefer, but a GCE Ubuntu VM is quick and easy). Let's refer to this as the `networking server`. Full documentation on how to install gcloud on this VM are given here : [https://cloud.google.com/compute/docs/gcloud-compute/](https://cloud.google.com/compute/docs/gcloud-compute/). For purposes of this demo, you should execute the following commands on the `networking server`.
 
             curl https://sdk.cloud.google.com | bash
             gcloud auth login
@@ -93,9 +92,9 @@ The installation assumes two GCE hosts, each with a valid IP address.  You'll ne
 
         iptables -t nat -A POSTROUTING -s 192.168.0.0/16 ! -d 192.168.0.0/16 -j MASQUERADE
 
-4. BIRD will not accept routes where the default gateway is not in the same subnet as the local IP on the interface, and for GCE the local IP is always a /32 (so no routes are in the same subnet). To resolve this, you must add a route that convinces BIRD that the default gateway really is valid by running a command such as that given below (where 10.240.40.50 is the IP of the server, and 10.240.0.1 is the gateway address; obviously change those for your deployment!). Note that you must do this on *both* hosts.
+4. BIRD will not accept routes where the default gateway is not in the same subnet as the local IP on the interface, and for GCE the local IP is always a /32 (so no routes are in the same subnet). To resolve this, you must add a route that convinces BIRD that the default gateway really is valid by running a command such as that given below (where 10.240.10.1 is the IP of the server, and 10.240.0.1 is the gateway address; obviously change those for your deployment!). Note that you must do this on *both* hosts.
 
-        ip addr add 10.240.40.50 peer 10.240.0.1 dev ens4v1
+        ip addr add 10.240.10.1 peer 10.240.0.1 dev ens4v1
 
     There's more on this situation here, in case you want to understand this further [http://marc.info/?l=bird-users&m=139809577125938&w=2](http://marc.info/?l=bird-users&m=139809577125938&w=2)
 
@@ -133,7 +132,7 @@ Next create some test containers, and network them. You'll want to create contai
 
     The name here is deliberately intended to be the IP address; picking sensible names makes it far simpler to keep track. *This creates an interactive container - so you'll need to keep creating ssh sessions for each container you create.* It is strongly recommended that you enter a command like `PS1='1_1:\w>'` in the container so that the command prompt reminds you which test container you are in!
 
-+ Now network the container. This would be done by the orchestration in a production deployment, but in this demo it is done by a shell script. Sample usage is as follows.
++ Now network the container from the host. This would be done by the orchestration in a production deployment, but in this demo it is done by a shell script. Sample usage is as follows.
 
         bash /opt/demo/network_container.sh CID IP GROUP
 
@@ -150,9 +149,16 @@ Next create some test containers, and network them. You'll want to create contai
     * Add an IP address to the `veth` interface.
     * Write a file in `/opt/plugin/data` which contains information about the endpoint (to be picked up by the dummy plugin).
 
-+ If you networked a container on the first host, then you are done - the script creates files in `/opt/plugin/data` where the Calico plugin reads it. If instead you networked a container on the second host, then you need to copy across the relevant container config file into `/opt/plugin/data`. This involves running the following commands on the first host (change the hostname and the name of the file being copied appropriately).
++ If you networked a container on the first host, then you are done - the script creates files in `/opt/plugin/data` where the Calico plugin reads it. If instead you networked a container on the second host, then you need to copy across the relevant container config file into `/opt/plugin/data`. This involves running the following commands on the first host (change the hostname(s) and the name of the file being copied appropriately).
 
-        scp host2:/opt/plugin/data/192_168_2_1.txt /opt/plugin/data
+    + If you're running CoreOS on the hosts, use GCE's `copy-files` command from the `networking server` to copy the file from `host-1` to the `networking server`, then again to copy the file from the `networking server` onto `host-1`. (Be sure to replace the `us-central1-a` zone value to whichever zone value your hosts are using.)
+
+            gcloud compute copy-files host-2:/opt/plugin/data/192_168_2_1.txt /tmp --zone us-central1-a
+            gcloud compute copy-files /tmp/192_168_2_1.txt host-1:/opt/plugin/data --zone us-central1-a
+    
+    + If your hosts are not running CoreOS, you can use scp on `host-1` to copy the file from `host-2` to `host-1`.
+
+            scp host-2:/opt/plugin/data/192_168_2_1.txt /opt/plugin/data
 
 + The Calico plugin checks for configuration dynamically, but it might take quite some time (up to a minute or two) before it notices and passes through changes to the other Calico components.
 
